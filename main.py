@@ -3,56 +3,45 @@ import logging
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from groq import Groq
 
-# ================== LOGGING ==================
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-
-print("STARTING BOT...")
-
-# ================== ENV ==================
+# ================== CONFIG ==================
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 
-if not TELEGRAM_TOKEN:
-    raise ValueError("❌ TELEGRAM_TOKEN belum diset!")
-
-if not GROQ_API_KEY:
-    raise ValueError("❌ GROQ_API_KEY belum diset!")
-
-# ================== GROQ ==================
 client = Groq(api_key=GROQ_API_KEY)
+
+# ================== LOGGING ==================
+logging.basicConfig(level=logging.INFO)
 
 # ================== COMMAND ==================
 def start(update, context):
     update.message.reply_text("Halo bro gue MOMON.AI 🔥 Ada yang bisa gue bantu?")
 
-# ================== CHAT ==================
+# ================== CHAT AI ==================
 def chat(update, context):
     try:
         user_message = update.message.text
+        print("USER:", user_message)
 
         response = client.chat.completions.create(
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Lo adalah MOMON.AI, bot santai, gaul, jawab singkat tapi jelas."
-                },
-                {
-                    "role": "user",
-                    "content": user_message
-                }
-            ],
             model="mixtral-8x7b-32768",
+            messages=[
+                {"role": "system", "content": "Lu adalah MOMON.AI, bot santai, gaul, dan suka bantu orang."},
+                {"role": "user", "content": user_message}
+            ]
         )
 
+        print("RAW:", response)
+
         ai_reply = response.choices[0].message.content
+
+        if not ai_reply:
+            ai_reply = "Gue bingung jawabnya bro 😅"
+
         update.message.reply_text(ai_reply)
 
     except Exception as e:
-        logging.error(f"ERROR: {e}")
-        update.message.reply_text("⚠️ Error bro, coba lagi nanti.")
+        print("ERROR:", e)
+        update.message.reply_text(f"ERROR: {e}")
 
 # ================== MAIN ==================
 def main():
@@ -66,6 +55,5 @@ def main():
     updater.start_polling()
     updater.idle()
 
-# ================== RUN ==================
 if __name__ == "__main__":
     main()
