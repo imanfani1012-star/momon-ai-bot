@@ -1,7 +1,6 @@
 import os
 import logging
 import time
-import json
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram import ChatAction
 from groq import Groq
@@ -14,98 +13,211 @@ client = Groq(api_key=GROQ_API_KEY)
 
 logging.basicConfig(level=logging.INFO)
 
-# ===== DATABASE FILE =====
-DATA_FILE = "data.json"
+# ===== ADMIN =====
+ADMIN_ID = "8385676898"
 
-def load_data():
-    try:
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return {}
-
-def save_data(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f)
-
-db = load_data()
-
-# ===== MEMORY CHAT =====
+# ===== DATABASE SEMENTARA =====
+user_memory = {}
 chat_history = {}
 user_mode = {}
 
-# ===== GET USER =====
-def get_user(uid):
-    uid = str(uid)
-    if uid not in db:
-        db[uid] = {
-            "limit": 10,
-            "referrals": 0,
-            "referred_by": None,
-            "name": "bro"
-        }
-    return db[uid]
+referrals = {}
+user_ref = {}
+user_limit = {}
+user_premium = {}
+
+LIMIT_FREE = 10
+REF_PREMIUM = 3
 
 # ===== COMMANDS =====
 def start(update, context):
     uid = str(update.message.chat_id)
-    user = get_user(uid)
 
-    # REFERRAL SYSTEM
+    # admin auto premium
+    if uid == ADMIN_ID:
+        user_premium[uid] = True
+
+    # referral
     if context.args:
         ref_id = context.args[0]
 
-        if ref_id != uid and user["referred_by"] is None:
-            user["referred_by"] = ref_id
+        if ref_id != uid and uid not in user_ref:
+            user_ref[uid] = ref_id
 
-            ref_user = get_user(ref_id)
-            ref_user["referrals"] += 1
-            ref_user["limit"] += 5
-
-            context.bot.send_message(
-                chat_id=int(ref_id),
-                text="🎉 Referral masuk! +5 limit 😎"
-            )
-
-            save_data(db)
-
-    bot_username = context.bot.username
-    ref_link = f"https://t.me/{bot_username}?start={uid}"
+            referrals[ref_id] = referrals.get(ref_id, 0) + 1
 
     update.message.reply_text(
-        f"🔥 MOMON.AI aktif bro!\n\n"
-        f"Limit: {user['limit']}\n"
-        f"Referral: {user['referrals']}\n\n"
-        f"🔗 Link lu:\n{ref_link}"
+        "🔥 MOMON.AI aktif bro!\n\n"
+        "💬 Chat bebas\n"
+        "🎁 Referral = unlock premium\n\n"
+        "Ketik /help"
     )
 
 def help_command(update, context):
     update.message.reply_text(
-        "📌 COMMAND:\n"
-        "/start\n"
-        "/reset\n"
-        "/history\n"
-        "/mode [santai/serius/toxic]\n"
-        "/ref\n"
-        "/top"
+        "/start\n/help\n/reset\n/history\n/mode santai\n/ref\n/status\n/addlimit"
     )
 
 def reset(update, context):
-    uid = str(update.message.chat_id)
+    uid = update.message.chat_id
+    user_memory.pop(uid, None)
     chat_history.pop(uid, None)
-    update.message.reply_text("♻️ Chat history direset!")
+    update.message.reply_text("♻️ Memory direset!")
 
 def history(update, context):
-    uid = str(update.message.chat_id)
+    uid = update.message.chat_id
     hist = chat_history.get(uid, [])
 
     if not hist:
-        update.message.reply_text("Belum ada history bro.")
+        update.message.reply_text("Belum ada history.")
         return
 
     text = "\n".join([f"{m['role']}: {m['content']}" for m in hist[-5:]])
-    update.message.reply_text(f"🧾 Last chat:\n\n{text}")
+    update.message.reply_text(text)
 
+def set_mode(update, context):
+    uid = update.message.chat_id
+    try:
+        mode = context.args[0]
+        user_mode[uid] = mode
+        update.message.reply_text(f"🎭 Mode: {mode}")
+    except:
+        update.message.reply_text("Contoh: /mode santai")
+
+def ref(update, context):
+    uid = str(update.message.chat_id)
+
+    total = referrals.get(uid, 0)
+    link = f"https://t.me/{context.bot.username}?start={uid}"
+
+    update.message.reply_text(
+        f"👥 Referral: {total}\n\n🔗 {link}"
+    )
+
+def status(update, context):
+    uid = str(update.message.chat_id)
+
+    limit = user_limit.get(uid, 0)
+    premium = user_premium.get(uid, False)
+
+    update.message.reply_text(
+        f"📊 Status:\n"
+        f"Limit: {limit}/{LIMIT_FREE}\n"
+        f"Premium: {'YES 🔥' if premium else 'NO'}"
+    )
+
+def addlimit(update, context):
+    uid = str(update.message.chat_id)
+
+    if uid != ADMIN_ID:
+        update.message.reply_text("❌ Lu bukan admin")
+        return
+
+    user_limit.clear()
+    update.message.reply_text("🔥 Semua limit direset!")
+
+# ===== CHAT =====
+def chat(update, context):
+    uid = str(update.message.chat_id)
+    user_text = update.message.text
+
+    try:
+        # admin bypass
+        if uid == ADMIN_ID:
+            user_premium[uid] = True
+
+        if uid not in user_limit:
+            user_limit[uid] = 0
+
+        # limit check
+        if not user_premium.get(uid, False):
+            if user_limit[uid] >= LIMIT_FREE:
+                update.message.reply_text(
+                    "❌ Limit habis!\nCari referral bro 😎\n/ref"
+                )
+                return
+
+        user_limit[uid] += 1
+
+        # unlock premium dari referral
+        if referrals.get(uid, 0) >= REF_PREMIUM:
+            user_premium[uid] = True
+
+        context.bot.send_chat_action(chat_id=uid, action=ChatAction.TYPING)
+        time.sleep(1)
+
+        # save nama
+        if "nama aku" in user_text.lower():
+            name = user_text.split("nama aku")[-1].strip()
+            user_memory[uid] = name
+            update.message.reply_text(f"Siap {name} 😎")
+            return
+
+        name = user_memory.get(uid, "bro")
+        mode = user_mode.get(uid, "santai")
+
+        if mode == "toxic":
+            style = "Jawab sarkas, nyolot tapi lucu."
+        elif mode == "serius":
+            style = "Jawab serius dan jelas."
+        else:
+            style = "Jawab santai kayak temen."
+
+        if uid not in chat_history:
+            chat_history[uid] = []
+
+        chat_history[uid].append({"role": "user", "content": user_text})
+        chat_history[uid] = chat_history[uid][-10:]
+
+        messages = [
+            {
+                "role": "system",
+                "content": f"""
+Lu MOMON.AI
+Panggil user: {name}
+{style}
+Jawaban singkat.
+"""
+            }
+        ] + chat_history[uid]
+
+        response = client.chat.completions.create(
+            messages=messages,
+            model="llama-3.3-70b-versatile"
+        )
+
+        reply = response.choices[0].message.content
+
+        chat_history[uid].append({"role": "assistant", "content": reply})
+
+        update.message.reply_text(reply)
+
+    except Exception as e:
+        logging.error(f"ERROR: {e}")
+        update.message.reply_text("⚠️ Error bro")
+
+# ===== MAIN =====
+def main():
+    updater = Updater(TELEGRAM_TOKEN, use_context=True)
+    dp = updater.dispatcher
+
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CommandHandler("help", help_command))
+    dp.add_handler(CommandHandler("reset", reset))
+    dp.add_handler(CommandHandler("history", history))
+    dp.add_handler(CommandHandler("mode", set_mode))
+    dp.add_handler(CommandHandler("ref", ref))
+    dp.add_handler(CommandHandler("status", status))
+    dp.add_handler(CommandHandler("addlimit", addlimit))
+
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, chat))
+
+    print("🚀 MOMON AI ADMIN MODE ON 🔥")
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == "__main__":
+    main()
 def set_mode(update, context):
     uid = str(update.message.chat_id)
     try:
