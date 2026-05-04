@@ -19,7 +19,7 @@ logging.basicConfig(
 def start(update, context):
     update.message.reply_text("🔥 Halo bro gue MOMON.AI\nTanya apa aja santai 😎")
 
-# ================== CHAT AI ==================
+# ================== CHAT ==================
 def chat(update, context):
     try:
         user_message = update.message.text
@@ -27,7 +27,7 @@ def chat(update, context):
 
         response = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "Lo adalah MOMON.AI, bot gaul, santai, kadang lucu."},
+                {"role": "system", "content": "Lo adalah MOMON.AI, bot gaul, santai, lucu."},
                 {"role": "user", "content": user_message}
             ],
             model="mixtral-8x7b-32768"
@@ -53,6 +53,10 @@ def main():
         return
 
     updater = Updater(TELEGRAM_TOKEN, use_context=True)
+
+    # 🔥 SUPER PENTING (ANTI CONFLICT)
+    updater.bot.delete_webhook(drop_pending_updates=True)
+
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
