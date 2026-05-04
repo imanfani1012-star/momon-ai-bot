@@ -23,7 +23,7 @@ def chat(update, context):
         print("USER:", user_message)
 
         response = client.chat.completions.create(
-            model="llama-3.1-70b-versatile",
+            model="llama-3.3-70b-versatile",
             messages=[
                 {"role": "system", "content": "Lu adalah MOMON.AI, bot santai, gaul, dan suka bantu orang."},
                 {"role": "user", "content": user_message}
