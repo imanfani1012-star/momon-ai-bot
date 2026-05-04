@@ -1,7 +1,7 @@
 import os
 import logging
 import time
-import requests
+import json
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram import ChatAction
 from groq import Groq
@@ -9,37 +9,75 @@ from groq import Groq
 # ===== CONFIG =====
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-HF_API_KEY = os.getenv("HF_API_KEY")  # HuggingFace (buat gambar)
 
 client = Groq(api_key=GROQ_API_KEY)
 
 logging.basicConfig(level=logging.INFO)
 
-# ===== MEMORY =====
-user_memory = {}
+# ===== DATABASE FILE =====
+DATA_FILE = "data.json"
+
+def load_data():
+    try:
+        with open(DATA_FILE, "r") as f:
+            return json.load(f)
+    except:
+        return {}
+
+def save_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f)
+
+db = load_data()
+
+# ===== MEMORY CHAT =====
 chat_history = {}
 user_mode = {}
 
-# ===== VOICE FUNCTION =====
-def text_to_speech(text):
-    url = "https://api.streamelements.com/kappa/v2/speech"
-    params = {
-        "voice": "Brian",
-        "text": text
-    }
-    response = requests.get(url, params=params)
-    return response.content
-
-# ===== IMAGE FUNCTION =====
-def generate_image(prompt):
-    url = "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2"
-    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
-    response = requests.post(url, headers=headers, json={"inputs": prompt})
-    return response.content
+# ===== GET USER =====
+def get_user(uid):
+    uid = str(uid)
+    if uid not in db:
+        db[uid] = {
+            "limit": 10,
+            "referrals": 0,
+            "referred_by": None,
+            "name": "bro"
+        }
+    return db[uid]
 
 # ===== COMMANDS =====
 def start(update, context):
-    update.message.reply_text("🔥 MOMON.AI aktif bro!\nKetik aja 😎")
+    uid = str(update.message.chat_id)
+    user = get_user(uid)
+
+    # REFERRAL SYSTEM
+    if context.args:
+        ref_id = context.args[0]
+
+        if ref_id != uid and user["referred_by"] is None:
+            user["referred_by"] = ref_id
+
+            ref_user = get_user(ref_id)
+            ref_user["referrals"] += 1
+            ref_user["limit"] += 5
+
+            context.bot.send_message(
+                chat_id=int(ref_id),
+                text="🎉 Referral masuk! +5 limit 😎"
+            )
+
+            save_data(db)
+
+    bot_username = context.bot.username
+    ref_link = f"https://t.me/{bot_username}?start={uid}"
+
+    update.message.reply_text(
+        f"🔥 MOMON.AI aktif bro!\n\n"
+        f"Limit: {user['limit']}\n"
+        f"Referral: {user['referrals']}\n\n"
+        f"🔗 Link lu:\n{ref_link}"
+    )
 
 def help_command(update, context):
     update.message.reply_text(
@@ -48,89 +86,108 @@ def help_command(update, context):
         "/reset\n"
         "/history\n"
         "/mode [santai/serius/toxic]\n"
-        "/voice [text]\n"
-        "/img [prompt]\n"
+        "/ref\n"
+        "/top"
     )
 
 def reset(update, context):
-    uid = update.message.chat_id
-    user_memory.pop(uid, None)
+    uid = str(update.message.chat_id)
     chat_history.pop(uid, None)
-    update.message.reply_text("♻️ Memory dihapus!")
+    update.message.reply_text("♻️ Chat history direset!")
 
 def history(update, context):
-    uid = update.message.chat_id
+    uid = str(update.message.chat_id)
     hist = chat_history.get(uid, [])
+
     if not hist:
-        update.message.reply_text("Belum ada history.")
+        update.message.reply_text("Belum ada history bro.")
         return
+
     text = "\n".join([f"{m['role']}: {m['content']}" for m in hist[-5:]])
-    update.message.reply_text(text)
+    update.message.reply_text(f"🧾 Last chat:\n\n{text}")
 
 def set_mode(update, context):
-    uid = update.message.chat_id
+    uid = str(update.message.chat_id)
     try:
         mode = context.args[0]
         user_mode[uid] = mode
-        update.message.reply_text(f"🎭 Mode: {mode}")
+        update.message.reply_text(f"🎭 Mode diganti ke: {mode}")
     except:
         update.message.reply_text("Contoh: /mode santai")
 
-# ===== VOICE COMMAND =====
-def voice(update, context):
-    try:
-        text = " ".join(context.args)
-        audio = text_to_speech(text)
-        update.message.reply_voice(audio)
-    except:
-        update.message.reply_text("Error voice bro")
+def myref(update, context):
+    uid = str(update.message.chat_id)
+    user = get_user(uid)
 
-# ===== IMAGE COMMAND =====
-def img(update, context):
-    try:
-        prompt = " ".join(context.args)
-        update.message.reply_text("🎨 Lagi gambar...")
-        image = generate_image(prompt)
-        update.message.reply_photo(photo=image)
-    except:
-        update.message.reply_text("Error generate gambar bro")
+    update.message.reply_text(
+        f"👥 Referral: {user['referrals']}\n"
+        f"⚡ Limit: {user['limit']}"
+    )
 
-# ===== CHAT AI =====
+def topref(update, context):
+    sorted_users = sorted(db.items(), key=lambda x: x[1]["referrals"], reverse=True)
+
+    text = "🏆 TOP REFERRAL:\n\n"
+    for i, (uid, data) in enumerate(sorted_users[:5], start=1):
+        text += f"{i}. {uid} → {data['referrals']} orang\n"
+
+    update.message.reply_text(text)
+
+# ===== CHAT =====
 def chat(update, context):
-    uid = update.message.chat_id
+    uid = str(update.message.chat_id)
     user_text = update.message.text
+    user = get_user(uid)
 
     try:
-        context.bot.send_chat_action(chat_id=uid, action=ChatAction.TYPING)
+        context.bot.send_chat_action(chat_id=int(uid), action=ChatAction.TYPING)
         time.sleep(1)
+
+        # LIMIT SYSTEM
+        if user["limit"] <= 0:
+            update.message.reply_text("🚫 Limit habis. Cari referral bro 😎")
+            return
+
+        user["limit"] -= 1
+        save_data(db)
 
         # SIMPAN NAMA
         if "nama aku" in user_text.lower():
             name = user_text.split("nama aku")[-1].strip()
-            user_memory[uid] = name
-            update.message.reply_text(f"Siap {name} 😎")
+            user["name"] = name
+            save_data(db)
+            update.message.reply_text(f"Siap {name}! gue inget 😎")
             return
 
-        name = user_memory.get(uid, "bro")
+        name = user.get("name", "bro")
         mode = user_mode.get(uid, "santai")
 
+        # MODE STYLE
         if mode == "toxic":
-            style = "Sarkas, nyolot tapi lucu."
+            style = "Jawab sarkas, nyolot, tapi lucu."
         elif mode == "serius":
-            style = "Serius dan jelas."
+            style = "Jawab serius, jelas, informatif."
         else:
-            style = "Santai dan gaul."
+            style = "Jawab santai, gaul."
 
+        # HISTORY
         if uid not in chat_history:
             chat_history[uid] = []
 
         chat_history[uid].append({"role": "user", "content": user_text})
         chat_history[uid] = chat_history[uid][-10:]
 
-        messages = [{
-            "role": "system",
-            "content": f"MOMON.AI, panggil {name}. {style}"
-        }] + chat_history[uid]
+        messages = [
+            {
+                "role": "system",
+                "content": f"""
+Lu adalah MOMON.AI.
+Panggil user: {name}.
+{style}
+Jawaban jangan kepanjangan.
+"""
+            }
+        ] + chat_history[uid]
 
         response = client.chat.completions.create(
             messages=messages,
@@ -138,13 +195,14 @@ def chat(update, context):
         )
 
         reply = response.choices[0].message.content
+
         chat_history[uid].append({"role": "assistant", "content": reply})
 
         update.message.reply_text(reply)
 
     except Exception as e:
-        logging.error(e)
-        update.message.reply_text("⚠️ Error bro")
+        logging.error(f"ERROR: {e}")
+        update.message.reply_text("⚠️ Error bro, coba lagi nanti.")
 
 # ===== MAIN =====
 def main():
@@ -156,12 +214,12 @@ def main():
     dp.add_handler(CommandHandler("reset", reset))
     dp.add_handler(CommandHandler("history", history))
     dp.add_handler(CommandHandler("mode", set_mode))
-    dp.add_handler(CommandHandler("voice", voice))
-    dp.add_handler(CommandHandler("img", img))
+    dp.add_handler(CommandHandler("ref", myref))
+    dp.add_handler(CommandHandler("top", topref))
 
     dp.add_handler(MessageHandler(Filters.text & ~Filters.command, chat))
 
-    print("🚀 BOT FULL FITUR NYALA")
+    print("🚀 BOT MOMON AI FULL FITUR NYALA...")
     updater.start_polling()
     updater.idle()
 
