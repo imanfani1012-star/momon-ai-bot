@@ -4,7 +4,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 from groq import Groq
 
 TELEGRAM_TOKEN = os.environ.get("8025930923:AAFtdj8UE8kHbF18_5DL7OQI4l0GMJDU0N0")
-GROQ_KEY = os.environ.get("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")
+GROQ_KEY = os.environ.get("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")
 
 client = Groq(api_key=GROQ_KEY)
 
