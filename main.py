@@ -43,7 +43,7 @@ def chat(update, context):
                     "content": user_message
                 }
             ],
-            model="llama3-8b-8192",
+            model="llama3-70b-8192",  # ✅ SUDAH FIX (model baru)
         )
 
         ai_reply = response.choices[0].message.content
