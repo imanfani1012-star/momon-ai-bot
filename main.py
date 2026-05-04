@@ -1,73 +1,45 @@
-import os
-import requests
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram.ext import Updater, MessageHandler, Filters, CommandHandler
 from groq import Groq
+import os
 
-# ===== CONFIG =====
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+# ambil env
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
+# client groq
 client = Groq(api_key=GROQ_API_KEY)
 
-# ===== START =====
+# start command
 def start(update, context):
-    update.message.reply_text(
-        "🔥 Halo bro gue MOMON.AI\n"
-        "💬 Chat bebas\n"
-        "🖼 Ketik: /gambar kucing lucu\n"
-    )
+    update.message.reply_text("🔥 Halo bro gue MOMON.AI\nTanya apa aja santai 😎")
 
-# ===== CHAT AI =====
-def chat(update, context):
-    user_message = update.message.text
-    print("USER:", user_message)
+# handle chat
+def handle(update, context):
+    user_text = update.message.text
 
     try:
         response = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": "Lu adalah MOMON.AI, bot santai, gaul Indonesia."},
-                {"role": "user", "content": user_message}
+                {"role": "system", "content": "Lu adalah AI santai, jawab kayak anak nongkrong."},
+                {"role": "user", "content": user_text}
             ],
-            model="llama3-8b-8192"
+            model="mixtral-8x7b-32768"  # model aman (TIDAK ERROR)
         )
 
-        ai_reply = response.choices[0].message.content
-        print("BOT:", ai_reply)
-
-        update.message.reply_text(ai_reply)
+        reply = response.choices[0].message.content
+        update.message.reply_text(reply)
 
     except Exception as e:
         print("ERROR:", e)
-        update.message.reply_text("⚠️ Waduh error bro, coba lagi nanti.")
+        update.message.reply_text("⚠️ Waduh error bro, coba lagi nanti")
 
-# ===== GAMBAR GRATIS =====
-def gambar(update, context):
-    try:
-        prompt = " ".join(context.args)
-
-        if not prompt:
-            update.message.reply_text("Contoh: /gambar kucing lucu")
-            return
-
-        # API GRATIS
-        url = f"https://image.pollinations.ai/prompt/{prompt}"
-
-        update.message.reply_text("🎨 Lagi bikin gambar...")
-
-        update.message.reply_photo(url)
-
-    except Exception as e:
-        print("ERROR GAMBAR:", e)
-        update.message.reply_text("❌ Gagal bikin gambar bro.")
-
-# ===== MAIN =====
+# main bot
 def main():
-    updater = Updater(TELEGRAM_TOKEN, use_context=True)
+    updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
 
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CommandHandler("gambar", gambar))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, chat))
+    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle))
 
     print("✅ Bot nyala bro...")
     updater.start_polling()
