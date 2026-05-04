@@ -9,7 +9,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-print("STARTING BOT...")
+print("🚀 STARTING MOMON AI BOT...")
 
 # ================== ENV ==================
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -25,7 +25,9 @@ client = Groq(api_key=GROQ_API_KEY)
 
 # ================== COMMAND ==================
 def start(update, context):
-    update.message.reply_text("Halo bro gue MOMON.AI 🔥 Ada yang bisa gue bantu?")
+    update.message.reply_text(
+        "🔥 Halo bro gue MOMON.AI\nTanya apa aja santai 😎"
+    )
 
 # ================== CHAT ==================
 def chat(update, context):
@@ -36,14 +38,18 @@ def chat(update, context):
             messages=[
                 {
                     "role": "system",
-                    "content": "Lo adalah MOMON.AI, bot santai, gaul, jawab singkat tapi jelas."
+                    "content": "Lo adalah MOMON.AI, bot santai, gaul, jawab singkat tapi jelas, pake bahasa tongkrongan."
                 },
                 {
                     "role": "user",
                     "content": user_message
                 }
             ],
-            model="llama3-70b-8192",  # ✅ SUDAH FIX (model baru)
+            model="llama3-8b-8192",  # ✅ AMAN (tidak error)
+            temperature=0.7,
+            max_tokens=512,
+            top_p=1,
+            stream=False
         )
 
         ai_reply = response.choices[0].message.content
@@ -51,7 +57,7 @@ def chat(update, context):
 
     except Exception as e:
         logging.error(f"ERROR: {e}")
-        update.message.reply_text("⚠️ Error bro, coba lagi nanti.")
+        update.message.reply_text("⚠️ Waduh error bro, coba lagi nanti.")
 
 # ================== MAIN ==================
 def main():
